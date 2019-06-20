@@ -40,7 +40,7 @@ async function register(server, options) {
       !routePlugins[hapiLimiter] ||
       !routePlugins[hapiLimiter].enable
     ) {
-      return h.continue();
+        return h.continue
     }
 
     const pluginSettings = Hoek.applyToDefaults(globalSettings, routePlugins[hapiLimiter]);
@@ -62,7 +62,7 @@ async function register(server, options) {
           }
           request.plugins[hapiLimiter].remaining = pluginSettings.limit - 1;
           request.plugins[hapiLimiter].reset = reset;
-          h.continue();
+            return h.continue
         });
       }
 
@@ -87,7 +87,7 @@ async function register(server, options) {
           return err;
         }
 
-            h.continue();
+              return h.continue
       });
     });
   });
@@ -114,13 +114,13 @@ async function register(server, options) {
       headers['X-Rate-Limit-Reset'] = request.plugins[hapiLimiter].reset;
     }
 
-    h.continue();
+      return h.continue
   });
 }
 
 exports.plugin = {
-  name: "hapi-limiter",
-  version: "1.0.0",
+    name: hapiLimiter,
+    version: "0.1.1",
   pkg: require('./package.json'),
   register: register
 };

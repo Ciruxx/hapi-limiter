@@ -1,5 +1,5 @@
-var Hoek = require('hoek');
-var Boom = require('boom');
+var Hoek = require('@hapi/hoek');
+var Boom = require('@hapi/boom');
 var hapiLimiter = 'hapi-limiter';
 
 var internals = {

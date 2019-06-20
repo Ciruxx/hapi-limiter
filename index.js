@@ -1,8 +1,8 @@
-var Hoek = require('@hapi/hoek');
-var Boom = require('@hapi/boom');
-var hapiLimiter = 'hapi-limiter';
+const Hoek = require('@hapi/hoek');
+const Boom = require('@hapi/boom');
+const hapiLimiter = 'hapi-limiter';
 
-var internals = {
+const internals = {
   defaults: {
     cache: {
       expiresIn: 1000 * 60 * 15,
@@ -10,11 +10,11 @@ var internals = {
     },
     limit: 15,
     ttl: 1000 * 60 * 15,
-    generateKeyFunc: function(request) {
-      var methodAndPath = request.method + ':' + request.path + ':';
-      var ip = request.headers['x-forwarded-for'];
+    generateKeyFunc: function (request) {
+      const methodAndPath = request.method + ':' + request.path + ':';
+      let ip = request.headers['x-forwarded-for'];
 
-      if ( !ip ) {
+      if (!ip) {
         ip = request.info.remoteAddress;
       }
 
@@ -24,59 +24,59 @@ var internals = {
 };
 
 
-exports.register =  function(server, options, done) {
-  var globalSettings = Hoek.applyToDefaults(internals.defaults, options);
+async function register(server, options) {
+  const globalSettings = Hoek.applyToDefaults(internals.defaults, options);
 
-  var cacheClient = globalSettings.cacheClient;
+  let cacheClient = globalSettings.cacheClient;
 
   if ( !cacheClient ) {
     cacheClient = server.cache(globalSettings.cache);
   }
 
-  server.ext('onPreHandler', function(request, reply) {
-    var routePlugins = request.route.settings.plugins;
+  server.ext('onPreHandler', function (request, h) {
+    const routePlugins = request.route.settings.plugins;
 
     if (
       !routePlugins[hapiLimiter] ||
       !routePlugins[hapiLimiter].enable
     ) {
-      return reply.continue();
+      return h.continue();
     }
 
-    var pluginSettings = Hoek.applyToDefaults(globalSettings, routePlugins[hapiLimiter]);
+    const pluginSettings = Hoek.applyToDefaults(globalSettings, routePlugins[hapiLimiter]);
 
-    var keyValue = pluginSettings.generateKeyFunc(request);
+    const keyValue = pluginSettings.generateKeyFunc(request);
 
     cacheClient.get(keyValue, function(err, value, cached) {
       if ( err ) {
-        return reply(err);
+        return err;
       }
       request.plugins[hapiLimiter] = {};
       request.plugins[hapiLimiter].limit = pluginSettings.limit;
 
       if ( !cached ) {
-        var reset = Date.now() + pluginSettings.ttl;
+        const reset = Date.now() + pluginSettings.ttl;
         return cacheClient.set(keyValue, { remaining: pluginSettings.limit - 1 }, pluginSettings.ttl, function(err) {
           if ( err ) {
-            return reply(err);
+            return err;
           }
           request.plugins[hapiLimiter].remaining = pluginSettings.limit - 1;
           request.plugins[hapiLimiter].reset = reset;
-          reply.continue();
+          h.continue();
         });
       }
 
       request.plugins[hapiLimiter].remaining = value.remaining - 1;
       request.plugins[hapiLimiter].reset = Date.now() + cached.ttl;
 
-      var error;
+      let error;
       if (  request.plugins[hapiLimiter].remaining < 0 ) {
         error = Boom.tooManyRequests('Rate Limit Exceeded');
         error.output.headers['X-Rate-Limit-Limit'] = request.plugins[hapiLimiter].limit;
         error.output.headers['X-Rate-Limit-Reset'] = request.plugins[hapiLimiter].reset;
         error.output.headers['X-Rate-Limit-Remaining'] = 0;
         error.reformat();
-        return reply(error);
+        return error;
       }
 
       cacheClient.set(
@@ -84,25 +84,25 @@ exports.register =  function(server, options, done) {
         { remaining: request.plugins[hapiLimiter].remaining },
         cached.ttl, function(err) {
         if ( err ) {
-          return reply(err);
+          return err;
         }
 
-        reply.continue();
+            h.continue();
       });
     });
   });
 
-  server.ext('onPostHandler', function(request, reply) {
-    var pluginSettings = request.route.settings.plugins;
-    var response;
+  server.ext('onPostHandler', function (request, h) {
+    const pluginSettings = request.route.settings.plugins;
+    let response;
 
     if (
       pluginSettings[hapiLimiter] &&
       pluginSettings[hapiLimiter].enable
     ) {
       response = request.response;
-      
-      let headers = response.headers
+
+      let headers = response.headers;
       if(!response.headers) {
           if (response.isBoom) {
               headers = response.output.headers
@@ -114,12 +114,13 @@ exports.register =  function(server, options, done) {
       headers['X-Rate-Limit-Reset'] = request.plugins[hapiLimiter].reset;
     }
 
-    reply.continue();
+    h.continue();
   });
+}
 
-  done();
-};
-
-exports.register.attributes = {
-  pkg: require('./package.json')
+exports.plugin = {
+  name: "hapi-limiter",
+  version: "1.0.0",
+  pkg: require('./package.json'),
+  register: register
 };
